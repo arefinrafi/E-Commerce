@@ -6,8 +6,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.views.generic import ListView, DetailView, View
 from django.utils import timezone
-from .models import Item, Order, OrderItem
-from .forms import CreateUserForm
+from .models import Item, Order, OrderItem, BillingAddress
+from .forms import CreateUserForm, CheckoutForm
 
 
 # Create your views here.
@@ -61,7 +61,36 @@ class ProductItemDetailView(DetailView):
 
 
 def checkout(request):
-    return render(request, 'account/checkout.html')
+    form = CheckoutForm()
+    if request.method == 'POST':
+        form = CheckoutForm(request.POST or None)
+        try:
+            order = Order.objects.get(user=request.user, orderd=False)
+            if form.is_valid():
+                street_address = form.cleaned_data.get('street_address')
+                apartment_address = form.cleaned_data.get('apartment_address')
+                country = form.cleaned_data.get('country')
+                zip = form.cleaned_data.get('zip')
+            # TODO: add functionality for this fields
+            # same_shipping_address = form.cleaned_data.get('same_shipping_address')
+            # save_info = form.cleaned_data.get('save_info')
+            payment_option = form.cleaned_data.get('payment_option')
+            billing_address = BillingAddress(
+                user=request.user,
+                street_address=street_address,
+                apartment_address=apartment_address,
+                country=country,
+                zip=zip
+            )
+            billing_address.save()
+            order.billing_address = billing_address
+            order.save()
+            return redirect("checkout")
+        messages.warning(request, 'Failed Checkout ')
+        return redirect('checkout')
+    except ObjectDoesNotExist:
+        messages.error(request, "You do not have an active order")
+        return redirect("order-summary")
 
 
 class OrderSummaryView(LoginRequiredMixin, View):
@@ -167,4 +196,3 @@ def remove_single_item_from_cart(request, slug):
         # add a message saying the userv doesn't have an order
         messages.info(request, "You do not have an active order")
         return redirect("product", slug=slug)
-
